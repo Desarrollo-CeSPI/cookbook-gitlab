@@ -60,6 +60,38 @@ node['gitlab']['packages'].each do |pkg|
   package pkg
 end
 
+# We'll we update the alternatives in orer to use Ruby 1.9.2 instead Ruby 1.8
+bash "Update and set gem alternatives" do
+    only_if "test $(update-alternatives --query gem | grep Value | awk '{print $2}') = '/usr/bin/gem1.8'"
+    code <<-EOF
+rm /usr/bin/ruby
+
+update-alternatives --install /usr/bin/ruby ruby /usr/bin/ruby1.8 180 \
+         --slave   /usr/share/man/man1/ruby.1.gz ruby.1.gz \
+                        /usr/share/man/man1/ruby1.8.1.gz \
+        --slave   /usr/bin/ri ri /usr/bin/ri1.8 \
+        --slave   /usr/bin/irb irb /usr/bin/irb1.8 \
+        --slave   /usr/bin/rdoc rdoc /usr/bin/rdoc1.8
+
+update-alternatives --install /usr/bin/ruby ruby /usr/bin/ruby1.9.1 400 \
+         --slave   /usr/share/man/man1/ruby.1.gz ruby.1.gz \
+                        /usr/share/man/man1/ruby1.9.1.1.gz \
+        --slave   /usr/bin/ri ri /usr/bin/ri1.9.1 \
+        --slave   /usr/bin/irb irb /usr/bin/irb1.9.1 \
+        --slave   /usr/bin/rdoc rdoc /usr/bin/rdoc1.9.1
+
+update-alternatives --quiet --install /usr/bin/gem gem /usr/bin/gem1.9.1 400 \
+            --slave /usr/share/man/man1/gem.1.gz gem.1.gz \
+            /usr/share/man/man1/gem1.9.1.1.gz \
+            --slave /etc/bash_completion.d/gem bash_completion_gem \
+            /etc/bash_completion.d/gem1.9.1 
+update-alternatives --set ruby /usr/bin/ruby1.9.1
+update-alternatives --set gem /usr/bin/gem1.9.1
+exit 0
+EOF
+end
+
+
 # Install sshkey gem into chef
 chef_gem "sshkey" do
   action :install
@@ -68,6 +100,7 @@ end
 # Install required Ruby Gems for Gitlab
 %w{ charlock_holmes bundler }.each do |gempkg|
   gem_package gempkg do
+    gem_binary("/usr/bin/gem1.9.1") if %w(ubuntu debian).include?(node.platform)
     action :install
   end
 end
@@ -241,7 +274,7 @@ template "#{node['gitlab']['app_home']}/config/database.yml" do
   )
 end
 
-without_group = node['gitlab']['database'] == 'mysql' ? 'postgres' : 'mysql'
+without_group = node['gitlab']['database']['type'] == 'mysql' ? 'postgres' : 'mysql'
 
 # Install Gems with bundle install
 execute "gitlab-bundle-install" do
@@ -255,10 +288,10 @@ end
 
 # Setup sqlite database for Gitlab
 execute "gitlab-bundle-rake" do
-  command "bundle exec rake gitlab:app:setup RAILS_ENV=production && touch .gitlab-setup"
+  command "echo yes | (bundle exec rake gitlab:setup RAILS_ENV=production && touch .gitlab-setup)"
   cwd node['gitlab']['app_home']
   user node['gitlab']['user']
-  group node['gitlab']['group']
+  group node['gitlab']['git_group']
   not_if { File.exists?("#{node['gitlab']['app_home']}/.gitlab-setup") }
 end
 
