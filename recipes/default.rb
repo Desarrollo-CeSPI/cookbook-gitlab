@@ -224,21 +224,6 @@ directory "#{node['gitlab']['app_home']}/tmp" do
   action :create
 end
 
-# Render gitlab config file
-template "#{node['gitlab']['app_home']}/config/gitlab.yml" do
-  owner node['gitlab']['user']
-  group node['gitlab']['group']
-  mode 0644
-  variables(
-    :fqdn => node['fqdn'],
-    :https_boolean => node['gitlab']['https'],
-    :git_user => node['gitlab']['git_user'],
-    :git_home => node['gitlab']['git_home'],
-    :backup_path => node['gitlab']['backup_path'],
-    :backup_keep_time => node['gitlab']['backup_keep_time']
-  )
-end
-
 # Setup the database
 case node['gitlab']['database']['type']
 when 'mysql'
@@ -271,6 +256,29 @@ template "#{node['gitlab']['app_home']}/config/database.yml" do
     :pool     => node['gitlab']['database']['pool'],
     :username => node['gitlab']['database']['username'],
     :password => node['gitlab']['database']['password']
+  )
+end
+
+# Render gitlab config file
+template "#{node['gitlab']['app_home']}/config/gitlab.yml" do
+  owner node['gitlab']['user']
+  group node['gitlab']['group']
+  mode 0644
+  variables(
+    :fqdn => node['fqdn'],
+    :https_boolean => node['gitlab']['https'],
+    :git_user => node['gitlab']['git_user'],
+    :git_home => node['gitlab']['git_home'],
+    :backup_path => node['gitlab']['backup_path'],
+    :backup_keep_time => node['gitlab']['backup_keep_time'],
+    :ldap_enabled => node['gitlab']['ldap']['enabled'],
+    :ldap_host => node['gitlab']['ldap']['host'],
+    :ldap_base => node['gitlab']['ldap']['base'],
+    :ldap_port => node['gitlab']['ldap']['port'],
+    :ldap_uid => node['gitlab']['ldap']['uid'],
+    :ldap_method => node['gitlab']['ldap']['method'],
+    :ldap_bind_dn => node['gitlab']['ldap']['bind_dn'],
+    :ldap_password => node['gitlab']['ldap']['password']
   )
 end
 
@@ -355,3 +363,11 @@ template "/etc/nginx/conf.d/default.conf" do
     :ssl_certificate_key => node['gitlab']['ssl_certificate_key']
   )
 end
+
+execute 'git permissions' do
+  command "sudo chown -R git:git /var/git/repositories"
+end
+execute 'git permissions' do
+  command "sudo chmod -R ug+rwXs /var/git/repositories"
+end
+
